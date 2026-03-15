@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heavenly Chat · WhatsApp style</title>
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- PeerJS (for true P2P, no backend needed) -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(145deg, #0b0c1e 0%, #1a1f3a 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Floating orbs for "heavenly" effect */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.25), rgba(200, 230, 255, 0.1));
+            filter: blur(70px);
+            z-index: 0;
+            animation: float 20s infinite ease-in-out;
+        }
+        .orb1 { width: 300px; height: 300px; top: -100px; left: -100px; }
+        .orb2 { width: 400px; height: 400px; bottom: -150px; right: -100px; background: radial-gradient(circle at 70% 70%, rgba(180, 220, 255, 0.3), rgba(120, 180, 255, 0.1)); animation-delay: -5s; }
+        .orb3 { width: 250px; height: 250px; bottom: 20%; left: 20%; background: radial-gradient(circle at 20% 80%, rgba(255, 200, 240, 0.3), rgba(200, 160, 255, 0.1)); animation-delay: -10s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(30px, 40px) scale(1.1); }
+            100% { transform: translate(0, 0) scale(1); }
+        }
+
+        /* main glass card */
+        .chat-app {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 1200px;
+            height: 90vh;
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-radius: 48px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+            display: flex;
+            overflow: hidden;
+            color: #fff;
+        }
+
+        /* left sidebar — heavenly contact panel */
+        .sidebar {
+            width: 30%;
+            background: rgba(10, 15, 30, 0.5);
+            backdrop-filter: blur(15px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 28px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .profile {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 60px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s;
+        }
+        .profile:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 215, 0, 0.4);
+        }
+        .avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #d4b4ff, #a6e2ff);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 600;
+            color: #0b0c1e;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .name-tag {
+            flex: 1;
+        }
+        .name-tag .label {
+            font-size: 12px;
+            opacity: 0.6;
+            letter-spacing: 0.5px;
+        }
+        .name-tag .value {
+            font-weight: 600;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            box-shadow: 0 0 10px #4caf50;
+        }
+
+        .connect-panel {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 28px;
+            padding: 22px 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .connect-panel h4 {
+            font-weight: 500;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #b3c7ff;
+            margin-bottom: 16px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .input-row {
+            background: rgba(255,255,255,0.05);
+            border-radius: 40px;
+            padding: 4px 18px;
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.2s;
+        }
+        .input-row:focus-within {
+            border-color: #ffd966;
+            box-shadow: 0 0 0 2px rgba(255, 217, 102, 0.2);
+        }
+        .input-row i {
+            color: #b3c7ff;
+            width: 24px;
+            font-size: 16px;
+        }
+        .input-row input {
+            background: transparent;
+            border: none;
+            padding: 16px 8px;
+            width: 100%;
+            color: white;
+            font-size: 15px;
+            outline: none;
+        }
+        .input-row input::placeholder {
+            color: rgba(255,255,255,0.4);
+            font-weight: 300;
+        }
+        button {
+            background: linear-gradient(135deg, #c2a2ff, #8ac4ff);
+            border: none;
+            color: #0a0f1a;
+            font-weight: 700;
+            padding: 16px 24px;
+            border-radius: 40px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s;
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            width: 100%;
+        }
+        button:hover {
+            transform: scale(1.02);
+            background: linear-gradient(135deg, #dbb5ff, #aad4ff);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+            border-color: rgba(255,215,0,0.6);
+        }
+        button:active { transform: scale(0.98); }
+
+        .call-section {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .call-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,215,0,0.3);
+            color: white;
+            font-weight: 500;
+        }
+        .call-btn i { color: #ffb4b4; }
+        .call-btn:hover { background: rgba(255,215,0,0.1); }
+
+        /* main chat area */
+        .chat-area {
+            width: 70%;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .chat-header {
+            padding: 24px 28px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(10, 10, 25, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        .contact-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .contact-avatar {
+            width: 50px;
+            height: 50px;
+            background: #ddb5ff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: #1a1f3a;
+            font-size: 20px;
+        }
+        .contact-details h3 {
+            font-weight: 600;
+            font-size: 20px;
+        }
+        .contact-details .status {
+            font-size: 13px;
+            color: #a5c9ff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .messages-container {
+            flex: 1;
+            padding: 28px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+        .message {
+            max-width: 70%;
+            padding: 14px 20px;
+            border-radius: 28px;
+            font-size: 15px;
+            line-height: 1.5;
+            word-wrap: break-word;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+            animation: appear 0.3s ease;
+        }
+        @keyframes appear { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+        .message.sent {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #b58eff, #8fbcff);
+            color: #0a0f1a;
+            border-bottom-right-radius: 6px;
+        }
+        .message.received {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #f0f0ff;
+            border-bottom-left-radius: 6px;
+        }
+        .timestamp {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-top: 4px;
+            text-align: right;
+        }
+        .message-input-area {
+            padding: 24px 28px;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        .message-input-area input {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 40px;
+            padding: 18px 22px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .message-input-area input:focus {
+            border-color: #ffd966;
+            background: rgba(255,255,255,0.1);
+        }
+        .send-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #c2a2ff, #8ac4ff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: #0a0f1a;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid rgba(255,215,0,0.3);
+        }
+        .send-btn:hover { transform: scale(1.1) rotate(5deg); }
+
+        /* video call overlay */
+        .video-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(20px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .video-container {
+            width: 90%;
+            max-width: 1000px;
+            background: #0b0c1e;
+            border-radius: 48px;
+            padding: 20px;
+            border: 2px solid rgba(255,215,0,0.4);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            position: relative;
+        }
+        .video-box {
+            flex: 1 1 300px;
+            background: #1e1f2e;
+            border-radius: 32px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .video-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+        }
+        .video-controls button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255,80,80,0.9);
+            color: white;
+            border: none;
+            font-size: 24px;
+        }
+        .small-note {
+            font-size: 13px;
+            color: #aab8e0;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* helpers */
+        .hidden { display: none !important; }
+        .text-glow { text-shadow: 0 0 10px #b3c7ff; }
+        i { font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+
+    <div class="chat-app">
+
+        <!-- SIDEBAR : heaven control -->
+        <div class="sidebar">
+            <div class="profile">
+                <div class="avatar" id="avatarInitial">👤</div>
+                <div class="name-tag">
+                    <div class="label">YOUR HEAVENLY ID</div>
+                    <div class="value" id="displayName">—</div>
+                </div>
+                <div class="status-dot" id="statusDot" title="Peer status"></div>
+            </div>
+
+            <div class="connect-panel">
+                <h4><i class="fas fa-cloud" style="margin-right: 8px;"></i>enter the realm</h4>
+                <div class="input-group">
+                    <div class="input-row">
+                        <i class="fas fa-user-astronaut"></i>
+                        <input type="text" id="nameInput" placeholder="Your name (e.g. Alex)" autocomplete="off">
+                    </div>
+                    <button id="setNameBtn"><i class="fas fa-star"></i> Set my name</button>
+                </div>
+                <div class="input-group" style="margin-top: 10px;">
+                    <div class="input-row">
+                        <i class="fas fa-address-book"></i>
+                        <input type="text" id="peerInput" placeholder="Receiver's name">
+                    </div>
+                    <button id="connectBtn"><i class="fas fa-link"></i> Connect to name</button>
+                </div>
+            </div>
+
+            <div class="call-section">
+                <button class="call-btn" id="videoCallBtn"><i class="fas fa-video"></i> Video call partner</button>
+                <button class="call-btn" id="endCallBtn" style="background: rgba(200,70,70,0.3);"><i class="fas fa-phone-slash"></i> End call</button>
+            </div>
+            <div class="small-note">
+                <i class="fas fa-shield-alt"></i> direct P2P · no servers
+            </div>
+        </div>
+
+        <!-- MAIN CHAT AREA (whatsapp heaven) -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <div class="contact-info">
+                    <div class="contact-avatar" id="contactAvatar">✨</div>
+                    <div class="contact-details">
+                        <h3 id="contactName">Waiting...</h3>
+                        <div class="status" id="connectionStatus"><span class="status-dot" style="background:#aaa;"></span> disconnected</div>
+                    </div>
+                </div>
+                <i class="fas fa-ghost" style="opacity:0.5; font-size:24px;"></i>
+            </div>
+
+            <div class="messages-container" id="messageContainer">
+                <div class="message received" style="background: rgba(255,255,255,0.05); align-self:center; max-width:90%;">
+                    ✨ Welcome, stargazer. Set your name & connect to a friend.
+                </div>
+            </div>
+
+            <div class="message-input-area">
+                <input type="text" id="messageInput" placeholder="Type a message..." disabled="true">
+                <div class="send-btn" id="sendMsgBtn"><i class="fas fa-paper-plane"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIDEO CALL OVERLAY -->
+    <div class="video-overlay" id="videoOverlay">
+        <div class="video-container">
+            <div class="video-box"><video id="localVideo" autoplay muted playsinline></video></div>
+            <div class="video-box"><video id="remoteVideo" autoplay playsinline></video></div>
+            <div class="video-controls">
+                <button id="closeVideoBtn"><i class="fas fa-phone-slash"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ==========  PEER CONFIGURATION ==========
+            let peer = null;
+            let currentPeerId = null;
+            let conn = null;               // data connection
+            let mediaCall = null;           // current media call
+            let localStream = null;
+            let remoteStream = null;
+
+            // UI elements
+            const nameInput = document.getElementById('nameInput');
+            const setNameBtn = document.getElementById('setNameBtn');
+            const peerInput = document.getElementById('peerInput');
+            const connectBtn = document.getElementById('connectBtn');
+            const displayNameSpan = document.getElementById('displayName');
+            const contactNameSpan = document.getElementById('contactName');
+            const connectionStatusSpan = document.getElementById('connectionStatus');
+            const statusDot = document.getElementById('statusDot');
+            const messageContainer = document.getElementById('messageContainer');
+            const messageInput = document.getElementById('messageInput');
+            const sendMsgBtn = document.getElementById('sendMsgBtn');
+            const videoCallBtn = document.getElementById('videoCallBtn');
+            const endCallBtn = document.getElementById('endCallBtn');
+            const videoOverlay = document.getElementById('videoOverlay');
+            const localVideo = document.getElementById('localVideo');
+            const remoteVideo = document.getElementById('remoteVideo');
+            const closeVideoBtn = document.getElementById('closeVideoBtn');
+            const avatarInitial = document.getElementById('avatarInitial');
+            const contactAvatar = document.getElementById('contactAvatar');
+
+            let myName = '';
+            let connectedPeerId = null;     // the other party's ID
+
+            // helper to add message
+            function addMessage(text, type, peerName = '') {
+                const msgDiv = document.createElement('div');
+                msgDiv.classList.add('message', type);
+                msgDiv.innerHTML = `${text}<div class="timestamp">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>`;
+                messageContainer.appendChild(msgDiv);
+                messageContainer.scrollTop = messageContainer.scrollHeight;
+            }
+
+            // Update connection UI
+            function setConnectedStatus(connected, peerId = '') {
+                if (connected) {
+                    connectionStatusSpan.innerHTML = '<span class="status-dot" style="background:#4caf50;"></span> connected to ' + (peerId || '');
+                    statusDot.style.background = '#4caf50';
+                    messageInput.disabled = false;
+                    contactNameSpan.innerText = peerId || 'friend';
+                    contactAvatar.innerText = peerId ? peerId.charAt(0).toUpperCase() : '✨';
+                } else {
+                    connectionStatusSpan.innerHTML = '<span class="status-dot" style="background:#aaa;"></span> disconnected';
+   
