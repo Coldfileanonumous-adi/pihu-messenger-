@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pihu Talk · future messenger</title>
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- PeerJS for pure P2P (works on GitHub) -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: #0c0b1a;
+            background-image: radial-gradient(circle at 30% 40%, #2b1e4a 0%, #0a0a18 90%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* futuristic floating grid lines */
+        .grid-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* start screen (modal) */
+        .start-screen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(4, 3, 15, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            transition: opacity 0.5s ease;
+        }
+        .start-card {
+            background: rgba(20, 15, 45, 0.7);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            border-radius: 48px;
+            padding: 48px 40px;
+            max-width: 460px;
+            width: 90%;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 255, 255, 0.3);
+            text-align: center;
+            backdrop-filter: blur(15px);
+        }
+        .start-card h1 {
+            font-size: 52px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a0f0ff, #ff99ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+            text-shadow: 0 0 30px #ff66ff80;
+        }
+        .start-card .sub {
+            color: #aac8ff;
+            font-size: 16px;
+            margin-bottom: 40px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+        .futuristic-input {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 60px;
+            padding: 18px 28px;
+            width: 100%;
+            color: white;
+            font-size: 18px;
+            outline: none;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+        .futuristic-input:focus {
+            border-color: #ff99ff;
+            box-shadow: 0 0 25px #ff66ff, 0 0 5px #00ffff;
+            background: rgba(255,255,255,0.1);
+        }
+        .futuristic-input::placeholder {
+            color: rgba(200, 220, 255, 0.4);
+            font-weight: 300;
+        }
+        .glow-button {
+            background: linear-gradient(135deg, #00e0ff, #c06eff);
+            border: none;
+            color: #0b0a1a;
+            font-weight: 700;
+            font-size: 20px;
+            padding: 18px 40px;
+            border-radius: 60px;
+            cursor: pointer;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            box-shadow: 0 0 30px #00b7ff, 0 10px 20px rgba(0,0,0,0.5);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid rgba(255,255,255,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .glow-button:hover:not(:disabled) {
+            transform: scale(1.02);
+            box-shadow: 0 0 50px #ff66ff, 0 0 30px #00ffff;
+        }
+        .glow-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: 0 0 15px #00b7ff;
+        }
+        .error-message {
+            color: #ff9f9f;
+            background: rgba(255, 80, 80, 0.15);
+            border: 1px solid #ff6060;
+            border-radius: 60px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .error-message i { color: #ff8080; }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* main app (hidden initially) */
+        .main-app {
+            position: relative;
+            z-index: 100;
+            width: 100%;
+            max-width: 1300px;
+            height: 90vh;
+            background: rgba(12, 10, 25, 0.5);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-radius: 56px;
+            border: 1px solid rgba(0, 255, 255, 0.25);
+            box-shadow: 0 30px 70px rgba(0,0,0,0.7), 0 0 0 1px rgba(255, 0, 255, 0.2) inset;
+            display: flex;
+            overflow: hidden;
+            color: white;
+            opacity: 0;
+            transition: opacity 0.6s;
+        }
+        .main-app.visible {
+            opacity: 1;
+        }
+
+        /* left panel – futuristic and minimal */
+        .left-panel {
+            width: 28%;
+            background: rgba(0, 0, 0, 0.3);
+            border-right: 1px solid rgba(0, 255, 255, 0.2);
+            padding: 32px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            background: rgba(255,255,255,0.02);
+            padding: 16px 22px;
+            border-radius: 50px;
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        .avatar {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(145deg, #41f0ff, #c15dff);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: 700;
+            color: #0f0f20;
+            box-shadow: 0 0 30px #9f4dff;
+        }
+        .user-name {
+            font-weight: 600;
+            font-size: 22px;
+            letter-spacing: -0.2px;
+            text-shadow: 0 0 15px cyan;
+        }
+        .badge {
+            font-size: 12px;
+            color: #a0dcff;
+            margin-top: 4px;
+        }
+
+        .connect-area {
+            background: rgba(0, 20, 40, 0.3);
+            border-radius: 40px;
+            padding: 24px 22px;
+            border: 1px solid rgba(255, 0, 255, 0.2);
+        }
+        .connect-area h3 {
+            font-weight: 400;
+            font-size: 14px;
+            color: #aad0ff;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+        .input-futuristic {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 50px;
+            padding: 16px 22px;
+            width: 100%;
+            color: white;
+            font-size: 16px;
+            outline: none;
+            margin-bottom: 18px;
+        }
+        .input-futuristic:focus {
+            border-color: #ff77ff;
+            box-shadow: 0 0 20px #ff44ff;
+        }
+        .action-btn {
+            background: transparent;
+            border: 1px solid #00ffff;
+            color: #00ffff;
+            padding: 14px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        .action-btn i { font-size: 18px; }
+        .action-btn:hover {
+            background: #00ffff20;
+            border-color: #ff88ff;
+            color: #fffc;
+            box-shadow: 0 0 30px cyan;
+        }
+        .call-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .call-btns .action-btn {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        .danger-btn {
+            border-color: #ff6060;
+            color: #ffa0a0;
+        }
+        .danger-btn:hover {
+            background: #ff404020;
+            border-color: #ff4040;
+        }
+
+        /* chat area */
+        .chat-area {
+            width: 72%;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            padding: 28px 32px;
+            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .contact-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .contact-avatar {
+            width: 54px;
+            height: 54px;
+            background: #4d3e8a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 600;
+            box-shadow: 0 0 30px #b77eff;
+        }
+        .contact-name {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .contact-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #9bc5ff;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #aaa;
+        }
+        .status-dot.online { background: #00ffaa; box-shadow: 0 0 15px #00ffaa; }
+
+        .messages-container {
+            flex: 1;
+            padding: 28px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .message {
+            max-width: 70%;
+            padding: 16px 22px;
+            border-radius: 30px;
+            font-size: 15px;
+            line-height: 1.5;
+            animation: msgPop 0.25s;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+        }
+        @keyframes msgPop {
+            0% { opacity: 0; transform: translateY(8px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .message.sent {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #00c3ff, #b266ff);
+            color: #0b0b1a;
+            border-bottom-right-radius: 4px;
+        }
+        .message.received {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            border-bottom-left-radius: 4px;
+        }
+        .timestamp {
+            font-size: 10px;
+            opacity: 0.6;
+            margin-top: 6px;
+            text-align: right;
+        }
+
+        .message-input-area {
+            padding: 24px 32px;
+            background: rgba(0, 0, 0, 0.2);
+            border-top: 1px solid rgba(0, 255, 255, 0.2);
+            display: flex;
+            gap: 16px;
+        }
+        .message-input-area input {
+            flex: 1;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 50px;
+            padding: 18px 26px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+        .message-input-area input:focus {
+            border-color: #ff88ff;
+            box-shadow: 0 0 30px #ff22ff80;
+        }
+        .send-btn {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #00f0ff, #c05eff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            color: #0a0a1a;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid white;
+        }
+        .send-btn:hover { transform: scale(1.1) rotate(8deg); box-shadow: 0 0 40px #0ff; }
+
+        /* video overlay */
+        .video-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(25px);
+            z-index: 3000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .video-card {
+            background: #0d0b1a;
+            border: 2px solid #00ffff;
+            border-radius: 64px;
+            padding: 24px;
+            max-width: 1100px;
+            width: 95%;
+            box-shadow: 0 0 80px #ff00c8;
+        }
+        .video-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .video-box {
+            flex: 1 1 300px;
+            background: #1e1a30;
+            border-radius: 40px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            border: 2px solid rgba(255,0,255,0.5);
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .video-controls {
+            display: flex;
+            justify-content: center;
+            margin-top: 25px;
+        }
+        .hang-btn {
+            background: #ff3b3b;
+            border: none;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            font-size: 30px;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 0 40px red;
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="grid-overlay"></div>
+
+    <!-- START SCREEN (ask name first) with error handling -->
+    <div class="start-screen" id="startScreen">
+        <div class="start-card">
+            <h1>PIHU TALK</h1>
+            <div class="sub">· future of connection ·</div>
+            <div class="error-message" id="startError">
+                <i class="fas fa-exclamation-triangle"></i> <span id="errorText">name taken or network issue</span>
+            </div>
+            <input type="text" class="futuristic-input" id="startNameInput" placeholder="Your cosmic name" autofocus>
+            <button class="glow-button" id="enterPihuBtn">
+                <span id="btnText">enter the grid</span>
+                <span class="spinner" id="spinner" style="display: none;"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN APP (initially hidden) -->
+    <div class="main-app" id="mainApp">
+        <!-- left panel -->
+        <div class="left-panel">
+            <div class="user-profile">
+                <div class="avatar" id="navAvatar">👤</div>
+                <div>
+                    <div class="user-name" id="navUserName">---</div>
+                    <div class="badge"><i class="fas fa-shield-alt"></i> pihu peer</div>
+                </div>
+            </div>
+
+            <div class="connect-area">
+                <h3><i class="fas fa-link"></i> connect to a friend</h3>
+                <input type="text" class="input-futuristic" id="receiverNameInput" placeholder="receiver's name">
+                <button class="action-btn" id="connectToPeerBtn"><i class="fas fa-plug"></i> establish link</button>
+
+                <div class="call-btns">
+                    <button class="action-btn" id="videoCallBtn"><i class="fas fa-video"></i> video</button>
+                    <button class="action-btn danger-btn" id="endCallBtn"><i class="fas fa-phone-slash"></i> end</button>
+                </div>
+            </div>
+            <div style="flex:1"></div>
+            <div style="color:#6b8cff; font-size:13px; text-align:center; opacity:0.6;">✨ direct P2P · no servers</div>
+        </div>
+
+        <!-- chat area -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <div class="contact-info">
+                    <div class="contact-avatar" id="chatAvatar">✨</div>
+                    <div>
+                        <div class="contact-name" id="chatContactName">not connected</div>
+                        <div class="contact-status" id="chatStatus"><span class="status-dot"></span> offline</div>
+                    </div>
+                </div>
+                <i class="fas fa-satellite-dish" style="font-size: 26px; opacity: 0.6;"></i>
+            </div>
+
+            <div class="messages-container" id="messageContainer">
+                <div class="message received" style="background:rgba(0,255,255,0.1); align-self:center; max-width:90%;">
+                    🌌 welcome to pihu talk · set your name and connect
+                </div>
+            </div>
+
+            <div class="message-input-area">
+                <input type="text" id="messageInput" placeholder="type a message..." disabled>
+                <div class="send-btn" id="sendMsgBtn"><i class="fas fa-paper-plane"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIDEO CALL OVERLAY -->
+    <div class="video-overlay" id="videoOverlay">
+        <div class="video-card">
+            <div class="video-grid">
+                <div class="video-box"><video id="localVideo" autoplay muted playsinline></video></div>
+                <div class="video-box"><video id="remoteVideo" autoplay playsinline></video></div>
+            </div>
+            <div class="video-controls">
+                <button class="hang-btn" id="closeVideoBtn"><i class="fas fa-phone-slash"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ------ UI Elements ------
+            const startScreen = document.getElementById('startScreen');
+            const mainApp = document.getElementById('mainApp');
+            const startNameInput = document.getElementById('startNameInput');
+            const enterBtn = document.getElementById('enterPihuBtn');
+            const btnText = document.getElementById('btnText');
+            const spinner = document.getElementById('spinner');
+            const errorDiv = document.getElementById('startError');
+            const errorText = document.getElementById('errorText');
+
+            // navigation
+            const navAvatar = document.getElementById('navAvatar');
+            const navUserName = document.getElementById('navUserName');
+            const chatAvatar = document.getElementById('chatAvatar');
+            const chatContactName = document.getElementById('chatContactName');
+            const chatStatus = document.getElementById('chatStatus');
+            const statusDot = chatStatus.querySelector('.status-dot');
+
+            // inputs & buttons
+            const receiverNameInput = document.getElementById('receiverNameI
